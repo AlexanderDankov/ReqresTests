@@ -21,15 +21,15 @@ public class ReqresTests {
         String userEmail = "emma.wong@reqres.in";
 
         Integer userId =
-        given()
-                .contentType(ContentType.JSON)
-                .body("{\"email\":\"" + userEmail + "\",\"password\": \"pistol\"}")
-                .when()
-                .post("https://reqres.in/api/register")
-                .then()
-                .statusCode(200)
-                .extract()
-                .path("id");
+                given()
+                        .contentType(ContentType.JSON)
+                        .body("{\"email\":\"" + userEmail + "\",\"password\": \"pistol\"}")
+                        .when()
+                        .post("https://reqres.in/api/register")
+                        .then()
+                        .statusCode(200)
+                        .extract()
+                        .path("id");
 
         get("https://reqres.in/api/users/" + userId)
                 .then()
