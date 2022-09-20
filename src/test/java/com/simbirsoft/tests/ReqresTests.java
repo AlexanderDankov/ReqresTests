@@ -1,33 +1,40 @@
 package com.simbirsoft.tests;
 
 import com.github.javafaker.Faker;
+import com.simbirsoft.models.UpdateUser;
+import com.simbirsoft.models.UserData;
 import io.qameta.allure.Feature;
 import io.qameta.allure.Severity;
 import io.qameta.allure.SeverityLevel;
-import io.restassured.http.ContentType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
-import static com.simbirsoft.filters.CustomLogFilter.customLogFilter;
+import static com.simbirsoft.specs.Specs.request;
+import static com.simbirsoft.specs.Specs.responseSpec;
 import static io.qameta.allure.Allure.step;
 import static io.restassured.RestAssured.given;
 import static io.restassured.module.jsv.JsonSchemaValidator.matchesJsonSchemaInClasspath;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.is;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertAll;
 
 public class ReqresTests {
 
     Faker faker = new Faker();
     private static Integer userId;
-    private static final String userEmail = "emma.wong@reqres.in";
+    private static final String
+            userEmail = "emma.wong@reqres.in",
+            firstName = "Emma",
+            lastName = "Wong";
     private static final int
             usersTotal = 12,
             usersPerPage = 6;
     private static List<Object> users;
-    private static Object user;
+    private static UserData user;
+    private static UpdateUser updateUser;
 
     @Test
     @Feature("Authorization")
@@ -37,34 +44,37 @@ public class ReqresTests {
         step("Регистрация пользователя", () ->
                 userId =
                         given()
-                                .filter(customLogFilter().withCustomTemplates())
-                                .log().uri()
-                                .log().body()
-                                .contentType(ContentType.JSON)
+                                .spec(request)
                                 .body("{\"email\":\"" + userEmail + "\",\"password\": \"pistol\"}")
                                 .when()
-                                .post("https://reqres.in/api/register")
+                                .post("/register")
                                 .then()
                                 .log().body()
-                                .statusCode(200)
+                                .spec(responseSpec)
                                 .body(matchesJsonSchemaInClasspath("schemas/UserRegistrationSchema.json"))
                                 .extract()
                                 .path("id")
-
         );
 
         step("Получение данных по зарегистрированному пользователю", () ->
-                given()
-                        .filter(customLogFilter().withCustomTemplates())
-                        .log().uri()
+                user = given()
+                        .spec(request)
                         .when()
-                        .get("https://reqres.in/api/users/" + userId)
+                        .get("/users/" + userId)
                         .then()
                         .log().body()
-                        .statusCode(200)
+                        .spec(responseSpec)
                         .body(matchesJsonSchemaInClasspath("schemas/GetUserSchema.json"))
-                        .body("data.email", is(userEmail))
-                        .body("data.id", is(userId))
+                        .extract().as(UserData.class)
+        );
+
+        step("Проверка данных по зарегистрированному пользователю", () ->
+                assertAll(
+                        () -> assertThat(user.getUser().getId()).isEqualTo(userId),
+                        () -> assertThat(user.getUser().getEmail()).isEqualTo(userEmail),
+                        () -> assertThat(user.getUser().getFirstName()).isEqualTo(firstName),
+                        () -> assertThat(user.getUser().getLastName()).isEqualTo(lastName)
+                )
         );
     }
 
@@ -76,13 +86,12 @@ public class ReqresTests {
         step("Получение списка пользователей", () ->
                 users =
                         given()
-                                .filter(customLogFilter().withCustomTemplates())
-                                .log().uri()
+                                .spec(request)
                                 .when()
-                                .get("https://reqres.in/api/users")
+                                .get("/users")
                                 .then()
                                 .log().body()
-                                .statusCode(200)
+                                .spec(responseSpec)
                                 .body(matchesJsonSchemaInClasspath("schemas/ListUsersSchema.json"))
                                 .body("total", is(usersTotal))
                                 .body("per_page", is(usersPerPage))
@@ -104,20 +113,23 @@ public class ReqresTests {
         String userJob = faker.job().position();
 
         step("Обновление данных профиля пользователя", () ->
-                given()
-                        .filter(customLogFilter().withCustomTemplates())
-                        .log().uri()
-                        .log().body()
-                        .contentType(ContentType.JSON)
+                updateUser = given()
+                        .spec(request)
                         .body("{\"name\": \"" + userName + "\", \"job\":\"" + userJob + "\"}")
                         .when()
-                        .post("https://reqres.in/api/users/2")
+                        .post("/users/2")
                         .then()
                         .log().body()
                         .statusCode(201)
                         .body(matchesJsonSchemaInClasspath("schemas/UpdateUserSchema.json"))
-                        .body("name", is(userName))
-                        .body("job", is(userJob))
+                        .extract().as(UpdateUser.class)
+        );
+
+        step("Проверка обновленных данных пользователя", () ->
+                assertAll(
+                        () -> assertThat(updateUser.getName()).isEqualTo(userName),
+                        () -> assertThat(updateUser.getJob()).isEqualTo(userJob)
+                )
         );
     }
 
@@ -131,35 +143,30 @@ public class ReqresTests {
         step("Получение данных по пользователю с id " + userId, () ->
                 user =
                         given()
-                                .filter(customLogFilter().withCustomTemplates())
-                                .log().uri()
+                                .spec(request)
                                 .when()
-                                .get("https://reqres.in/api/users/" + userId)
+                                .get("/users/" + userId)
                                 .then()
                                 .log().body()
-                                .statusCode(200)
+                                .spec(responseSpec)
                                 .body(matchesJsonSchemaInClasspath("schemas/GetUserSchema.json"))
-                                .extract()
-                                .path("data")
+                                .extract().as(UserData.class)
         );
 
-        step("Получение списка пользователей", () ->
-                users =
+        step("Получение списка пользователей и проверка наличия пользователя в списке", () ->
                         given()
-                                .filter(customLogFilter().withCustomTemplates())
-                                .log().uri()
+                                .spec(request)
                                 .when()
-                                .get("https://reqres.in/api/users")
+                                .get("/users")
                                 .then()
                                 .log().body()
-                                .statusCode(200)
+                                .spec(responseSpec)
                                 .body(matchesJsonSchemaInClasspath("schemas/ListUsersSchema.json"))
-                                .extract()
-                                .path("data")
-        );
-
-        step("Проверка наличия пользователя с id " + userId + " в списке пользователей", () ->
-                assertTrue(users.contains(user), "User not found in list")
+                                .body("data.findAll{it.email =~/.*?@reqres.in/}.email.flatten()",
+                                        hasItem(user.getUser().getEmail()))
+                                .body("data.findAll{it}.id.flatten()", hasItem(user.getUser().getId()))
+                                .body("data.findAll{it}.first_name.flatten()", hasItem(user.getUser().getFirstName()))
+                                .body("data.findAll{it}.last_name.flatten()", hasItem(user.getUser().getLastName()))
         );
     }
 
@@ -173,13 +180,10 @@ public class ReqresTests {
 
         step("Проверка сообщения об ошибке при регистрации стороннего пользователя", () ->
                 given()
-                        .filter(customLogFilter().withCustomTemplates())
-                        .log().uri()
-                        .log().body()
-                        .contentType(ContentType.JSON)
+                        .spec(request)
                         .body("{\"email\": \"" + randomUserEmail + "\", \"password\": \"" + randomUserPassword + "\"}")
                         .when()
-                        .post("https://reqres.in/api/register")
+                        .post("/register")
                         .then()
                         .log().body()
                         .statusCode(400)
